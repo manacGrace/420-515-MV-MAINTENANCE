@@ -1,0 +1,108 @@
+services:
+  # MariaDB Database
+  mariadb:
+    image: mariadb:10.11
+    container_name: series-mariadb
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: test
+      MYSQL_USER: appuser
+      MYSQL_PASSWORD: apppassword
+    ports:
+      - "3306:3306"
+    volumes:
+      - mariadb_data:/var/lib/mysql
+      - ./420-515-MV-MAINTENANCE-DE-LOGICIEL-LAB1-BACKEND/bd.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - series-network
+    restart: unless-stopped
+
+  # Jenkins CI/CD Server
+  jenkins:
+    image: jenkins/jenkins:lts-jdk21
+    container_name: series-jenkins
+    user: root
+    ports:
+      - "8080:8080"
+      - "50000:50000"
+    volumes:
+      - jenkins_home:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /usr/bin/docker:/usr/bin/docker
+      - ./Epic-4:/var/jenkins_home/workspace/series-backend
+      - ./jenkins-config.yaml:/var/jenkins_home/casc_configs/jenkins.yaml:ro
+      - ./plugins.txt:/usr/share/jenkins/ref/plugins.txt:ro
+    environment:
+      - JAVA_OPTS=-Djenkins.install.runSetupWizard=false -Dcasc.jenkins.config=/var/jenkins_home/casc_configs/jenkins.yaml
+      - JENKINS_OPTS=--httpPort=8080
+      - CASC_JENKINS_CONFIG=/var/jenkins_home/casc_configs/jenkins.yaml
+    networks:
+      - series-network
+    restart: unless-stopped
+    depends_on:
+      - mariadb
+
+  # Application Backend
+  series-backend:
+    build:
+      context: ../420-515-MV-MAINTENANCE-DE-LOGICIEL-LAB1-BACKEND/backend
+      dockerfile: Dockerfile.simple
+    container_name: series-backend-app
+    ports:
+      - "8888:8888"
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:mariadb://mariadb:3306/test
+      - SPRING_DATASOURCE_USERNAME=appuser
+      - SPRING_DATASOURCE_PASSWORD=apppassword
+      - SPRING_DATASOURCE_DRIVER_CLASS_NAME=org.mariadb.jdbc.Driver
+    networks:
+      - series-network
+    depends_on:
+      - mariadb
+    restart: unless-stopped
+    profiles:
+      - app
+
+  # Frontend Application
+  series-frontend:
+    build:
+      context: ../420-515-MV-MAINTENANCE-DE-LOGICIEL-LAB1-FRONTEND
+      dockerfile: Dockerfile
+    container_name: series-frontend-app
+    ports:
+      - "5173:80"
+    networks:
+      - series-network
+    depends_on:
+      - series-backend
+    restart: unless-stopped
+    profiles:
+      - app
+
+  # Nginx Reverse Proxy (Optional)
+  nginx:
+    image: nginx:alpine
+    container_name: series-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Epic-4/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./420-515-MV-MAINTENANCE-DE-LOGICIEL-LAB1-FRONTEND/dist:/usr/share/nginx/html:ro
+    networks:
+      - series-network
+    depends_on:
+      - series-backend
+    restart: unless-stopped
+    profiles:
+      - production
+
+volumes:
+  mariadb_data:
+    driver: local
+  jenkins_home:
+    driver: local
+
+networks:
+  series-network:
+    driver: bridge

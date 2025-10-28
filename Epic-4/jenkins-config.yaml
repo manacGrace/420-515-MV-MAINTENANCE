@@ -1,0 +1,254 @@
+jenkins:
+  systemMessage: "Jenkins configured automatically by JCasC"
+  numExecutors: 2
+  scmCheckoutRetryCount: 3
+  
+  securityRealm:
+    local:
+      allowsSignup: false
+      users:
+        - id: "admin"
+          password: "admin123"
+
+  authorizationStrategy:
+    loggedInUsersCanDoAnything:
+      allowAnonymousRead: true
+
+tool:
+  maven:
+    installations:
+      - name: "Maven-3.9.6"
+        properties:
+          - installSource:
+              installers:
+                - maven:
+                    id: "3.9.6"
+
+plugins:
+  required:
+    - workflow-aggregator
+    - docker-workflow
+    - jacoco
+    - htmlpublisher
+    - test-results-analyzer
+    - build-timeout
+    - timestamper
+    - maven-plugin
+    - git
+    - configuration-as-code
+    - job-dsl
+
+jobs:
+  - script: >
+      pipelineJob('series-backend-pipeline') {
+        description('CI/CD Pipeline for Series Backend Application')
+        
+        definition {
+          cps {
+            script('''
+              pipeline {
+                agent any
+                
+                environment {
+                  DOCKER_IMAGE = 'series-backend'
+                  DOCKER_TAG = "${BUILD_NUMBER}"
+                  CONTAINER_NAME = 'series-backend-container'
+                  PORT = '8888'
+                  MAVEN_OPTS = '-Xmx1024m'
+                }
+                
+                stages {
+                  stage('Checkout') {
+                    steps {
+                      echo 'Using local workspace...'
+                    }
+                  }
+                  
+                  stage('Build & Package') {
+                    steps {
+                      echo 'Building and packaging Maven project...'
+                      script {
+                        sh '''
+                          cd 420-515-MV-MAINTENANCE-DE-LOGICIEL-LAB1-BACKEND/backend
+                          ./mvnw clean package -DskipTests
+                        '''
+                      }
+                      archiveArtifacts artifacts: '420-515-MV-MAINTENANCE-DE-LOGICIEL-LAB1-BACKEND/backend/target/*.jar', fingerprint: true
+                    }
+                  }
+                  
+                  stage('Unit Tests') {
+                    steps {
+                      echo 'Running unit tests...'
+                      script {
+                        sh '''
+                          cd 420-515-MV-MAINTENANCE-DE-LOGICIEL-LAB1-BACKEND/backend
+                          ./mvnw test
+                        '''
+                      }
+                    }
+                    post {
+                      always {
+                        publishTestResults testResultsPattern: '420-515-MV-MAINTENANCE-DE-LOGICIEL-LAB1-BACKEND/backend/target/surefire-reports/*.xml'
+                        publishCoverage adapters: [
+                          jacocoAdapter('420-515-MV-MAINTENANCE-DE-LOGICIEL-LAB1-BACKEND/backend/target/site/jacoco/jacoco.xml')
+                        ], sourceFileResolver: sourceFiles('STORE_LAST_BUILD')
+                      }
+                    }
+                  }
+                  
+                  stage('Code Quality Check') {
+                    steps {
+                      echo 'Checking code coverage threshold...'
+                      script {
+                        sh '''
+                          cd 420-515-MV-MAINTENANCE-DE-LOGICIEL-LAB1-BACKEND/backend
+                          ./mvnw jacoco:check
+                        '''
+                      }
+                    }
+                  }
+                  
+                  stage('Generate Documentation') {
+                    steps {
+                      echo 'Generating JavaDoc...'
+                      script {
+                        sh '''
+                          cd 420-515-MV-MAINTENANCE-DE-LOGICIEL-LAB1-BACKEND/backend
+                          ./mvnw javadoc:javadoc
+                        '''
+                      }
+                      publishHTML([
+                        allowMissing: false,
+                        alwaysLinkToLastBuild: true,
+                        keepAll: true,
+                        reportDir: '420-515-MV-MAINTENANCE-DE-LOGICIEL-LAB1-BACKEND/backend/target/site/apidocs',
+                        reportFiles: 'index.html',
+                        reportName: 'JavaDoc Report'
+                      ])
+                    }
+                  }
+                  
+                  stage('Docker Build') {
+                    steps {
+                      echo 'Building Docker image...'
+                      script {
+                        sh '''
+                          docker build -t ${DOCKER_IMAGE}:${DOCKER_TAG} -f Epic-4/Dockerfile .
+                          docker tag ${DOCKER_IMAGE}:${DOCKER_TAG} ${DOCKER_IMAGE}:latest
+                        '''
+                      }
+                    }
+                  }
+                  
+                  stage('Docker Test') {
+                    steps {
+                      echo 'Testing Docker container...'
+                      script {
+                        sh '''
+                          # Stop and remove existing container if it exists
+                          docker stop ${CONTAINER_NAME} || true
+                          docker rm ${CONTAINER_NAME} || true
+                          
+                          # Run container in background
+                          docker run -d --name ${CONTAINER_NAME} -p ${PORT}:8888 ${DOCKER_IMAGE}:${DOCKER_TAG}
+                          
+                          # Wait for application to start
+                          sleep 30
+                          
+                          # Test if application is responding
+                          curl -f http://localhost:${PORT}/api/auth/register || exit 1
+                          
+                          # Stop test container
+                          docker stop ${CONTAINER_NAME}
+                          docker rm ${CONTAINER_NAME}
+                        '''
+                      }
+                    }
+                  }
+                }
+                
+                post {
+                  always {
+                    echo 'Cleaning up workspace...'
+                    cleanWs()
+                  }
+                  
+                  success {
+                    echo 'Pipeline completed successfully!'
+                    script {
+                      sendNotification('SUCCESS', 'Pipeline completed successfully!')
+                    }
+                  }
+                  
+                  failure {
+                    echo 'Pipeline failed!'
+                    script {
+                      sendNotification('FAILURE', 'Pipeline failed! Check the logs.')
+                    }
+                  }
+                  
+                  unstable {
+                    echo 'Pipeline completed with warnings!'
+                    script {
+                      sendNotification('UNSTABLE', 'Pipeline completed with warnings!')
+                    }
+                  }
+                }
+              }
+              
+              def sendNotification(status, message) {
+                def discordWebhook = 'YOUR_DISCORD_WEBHOOK_URL'
+                def color = status == 'SUCCESS' ? '65280' : status == 'FAILURE' ? '16711680' : '16776960'
+                
+                def payload = [
+                  embeds: [[
+                    title: "Jenkins Pipeline ${status}",
+                    description: message,
+                    color: color as Integer,
+                    fields: [
+                      [
+                        name: "Project",
+                        value: env.JOB_NAME,
+                        inline: true
+                      ],
+                      [
+                        name: "Build",
+                        value: env.BUILD_NUMBER,
+                        inline: true
+                      ],
+                      [
+                        name: "Branch",
+                        value: env.BRANCH_NAME ?: env.GIT_BRANCH,
+                        inline: true
+                      ]
+                    ],
+                    timestamp: new Date().toISOString()
+                  ]]
+                ]
+                
+                echo "Notification would be sent: ${message}"
+              }
+            ''')
+            sandbox()
+          }
+        }
+        
+        triggers {
+          scm('H/5 * * * *')
+        }
+        
+        properties {
+          buildDiscarder {
+            strategy {
+              logRotator {
+                daysToKeepStr: '30'
+                numToKeepStr: '10'
+                artifactDaysToKeepStr: '7'
+                artifactNumToKeepStr: '5'
+              }
+            }
+          }
+        }
+      }
+    ''')

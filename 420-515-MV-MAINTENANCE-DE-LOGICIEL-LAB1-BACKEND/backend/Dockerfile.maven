@@ -1,0 +1,20 @@
+# Working Dockerfile for Spring Boot Backend
+FROM openjdk:21-jdk-slim
+
+# Install Maven
+RUN apt-get update && apt-get install -y maven && rm -rf /var/lib/apt/lists/*
+
+# Set working directory
+WORKDIR /app
+
+# Copy everything
+COPY . .
+
+# Download dependencies (this will cache them)
+RUN mvn dependency:resolve
+
+# Expose port
+EXPOSE 8888
+
+# Run the application using Spring Boot Maven plugin
+CMD ["mvn", "org.springframework.boot:spring-boot-maven-plugin:run"]

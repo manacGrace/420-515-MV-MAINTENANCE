@@ -1,0 +1,250 @@
+pipeline {
+    agent any
+    
+    environment {
+        DOCKER_IMAGE = 'series-backend'
+        DOCKER_TAG = "${BUILD_NUMBER}"
+        CONTAINER_NAME = 'series-backend-container'
+        PORT = '8888'
+        MAVEN_OPTS = '-Xmx1024m'
+    }
+    
+    stages {
+        stage('Checkout') {
+            steps {
+                echo 'Checking out source code...'
+                checkout scm
+            }
+        }
+        
+        stage('Build & Package') {
+            steps {
+                echo 'Building and packaging Maven project...'
+                script {
+                    sh '''
+                        cd ../420-515-MV-MAINTENANCE-DE-LOGICIEL-LAB1-BACKEND/backend
+                        ./mvnw clean package -DskipTests
+                    '''
+                }
+                archiveArtifacts artifacts: '../420-515-MV-MAINTENANCE-DE-LOGICIEL-LAB1-BACKEND/backend/target/*.jar', fingerprint: true
+            }
+        }
+        
+        stage('Unit Tests') {
+            steps {
+                echo 'Running unit tests...'
+                script {
+                    sh '''
+                        cd ../420-515-MV-MAINTENANCE-DE-LOGICIEL-LAB1-BACKEND/backend
+                        ./mvnw test
+                    '''
+                }
+            }
+            post {
+                always {
+                    // Publish test results
+                    publishTestResults testResultsPattern: '../420-515-MV-MAINTENANCE-DE-LOGICIEL-LAB1-BACKEND/backend/target/surefire-reports/*.xml'
+                    
+                    // Publish JaCoCo coverage report
+                    publishCoverage adapters: [
+                        jacocoAdapter('../420-515-MV-MAINTENANCE-DE-LOGICIEL-LAB1-BACKEND/backend/target/site/jacoco/jacoco.xml')
+                    ], sourceFileResolver: sourceFiles('STORE_LAST_BUILD')
+                }
+            }
+        }
+        
+        stage('Integration Tests') {
+            steps {
+                echo 'Running integration tests...'
+                script {
+                    sh '''
+                        cd ../420-515-MV-MAINTENANCE-DE-LOGICIEL-LAB1-BACKEND/backend
+                        ./mvnw verify -DskipUnitTests
+                    '''
+                }
+            }
+            post {
+                always {
+                    publishTestResults testResultsPattern: '../420-515-MV-MAINTENANCE-DE-LOGICIEL-LAB1-BACKEND/backend/target/failsafe-reports/*.xml'
+                }
+            }
+        }
+        
+        stage('Code Quality Check') {
+            steps {
+                echo 'Checking code coverage threshold...'
+                script {
+                    sh '''
+                        cd ../420-515-MV-MAINTENANCE-DE-LOGICIEL-LAB1-BACKEND/backend
+                        ./mvnw jacoco:check
+                    '''
+                }
+            }
+        }
+        
+        stage('Generate Documentation') {
+            steps {
+                echo 'Generating JavaDoc...'
+                script {
+                    sh '''
+                        cd ../420-515-MV-MAINTENANCE-DE-LOGICIEL-LAB1-BACKEND/backend
+                        ./mvnw javadoc:javadoc
+                    '''
+                }
+                publishHTML([
+                    allowMissing: false,
+                    alwaysLinkToLastBuild: true,
+                    keepAll: true,
+                    reportDir: '../420-515-MV-MAINTENANCE-DE-LOGICIEL-LAB1-BACKEND/backend/target/site/apidocs',
+                    reportFiles: 'index.html',
+                    reportName: 'JavaDoc Report'
+                ])
+            }
+        }
+        
+        stage('Docker Build') {
+            steps {
+                echo 'Building Docker image...'
+                script {
+                    sh '''
+                        docker build -t ${DOCKER_IMAGE}:${DOCKER_TAG} -f Dockerfile .
+                        docker tag ${DOCKER_IMAGE}:${DOCKER_TAG} ${DOCKER_IMAGE}:latest
+                    '''
+                }
+            }
+        }
+        
+        stage('Docker Test') {
+            steps {
+                echo 'Testing Docker container...'
+                script {
+                    sh '''
+                        # Stop and remove existing container if it exists
+                        docker stop ${CONTAINER_NAME} || true
+                        docker rm ${CONTAINER_NAME} || true
+                        
+                        # Run container in background
+                        docker run -d --name ${CONTAINER_NAME} -p ${PORT}:8888 ${DOCKER_IMAGE}:${DOCKER_TAG}
+                        
+                        # Wait for application to start
+                        sleep 30
+                        
+                        # Test if application is responding
+                        curl -f http://localhost:${PORT}/actuator/health || exit 1
+                        
+                        # Stop test container
+                        docker stop ${CONTAINER_NAME}
+                        docker rm ${CONTAINER_NAME}
+                    '''
+                }
+            }
+        }
+        
+        stage('Deploy to Registry') {
+            when {
+                branch 'main'
+            }
+            steps {
+                echo 'Pushing to Docker registry...'
+                script {
+                    // Uncomment and configure when you have a registry
+                    // sh '''
+                    //     docker tag ${DOCKER_IMAGE}:${DOCKER_TAG} your-registry.com/${DOCKER_IMAGE}:${DOCKER_TAG}
+                    //     docker push your-registry.com/${DOCKER_IMAGE}:${DOCKER_TAG}
+                    // '''
+                    echo 'Docker registry push would happen here (configure your registry)'
+                }
+            }
+        }
+    }
+    
+    post {
+        always {
+            echo 'Cleaning up workspace...'
+            cleanWs()
+        }
+        
+        success {
+            echo 'Pipeline completed successfully!'
+            script {
+                // Send success notification
+                sendNotification('SUCCESS', 'Pipeline completed successfully!')
+            }
+        }
+        
+        failure {
+            echo 'Pipeline failed!'
+            script {
+                // Send failure notification
+                sendNotification('FAILURE', 'Pipeline failed! Check the logs.')
+            }
+        }
+        
+        unstable {
+            echo 'Pipeline completed with warnings!'
+            script {
+                // Send unstable notification
+                sendNotification('UNSTABLE', 'Pipeline completed with warnings!')
+            }
+        }
+    }
+}
+
+def sendNotification(status, message) {
+    // Discord notification example
+    def discordWebhook = 'https://discord.com/api/webhooks/1432492850292985987/qcf6O4pTehGPTey-oid8jjfjL--C9s9rPFFJsUMFaFAb5kMrDufcsNMerFmZ2FYiiicu'
+    def color = status == 'SUCCESS' ? '65280' : status == 'FAILURE' ? '16711680' : '16776960'
+    
+    def payload = [
+        embeds: [[
+            title: "Jenkins Pipeline ${status}",
+            description: message,
+            color: color as Integer,
+            fields: [
+                [
+                    name: "Project",
+                    value: env.JOB_NAME,
+                    inline: true
+                ],
+                [
+                    name: "Build",
+                    value: env.BUILD_NUMBER,
+                    inline: true
+                ],
+                [
+                    name: "Branch",
+                    value: env.BRANCH_NAME ?: env.GIT_BRANCH,
+                    inline: true
+                ]
+            ],
+            timestamp: new Date().toISOString()
+        ]]
+    ]
+    
+    // Uncomment when you have a Discord webhook configured
+    // httpRequest(
+    //     httpMode: 'POST',
+    //     url: discordWebhook,
+    //     contentType: 'APPLICATION_JSON',
+    //     requestBody: groovy.json.JsonBuilder(payload).toPrettyString()
+    // )
+    
+    echo "Notification would be sent: ${message}"
+}
+
+// Email notification function (alternative to Discord)
+def sendEmailNotification(status, message) {
+    emailext (
+        subject: "Jenkins Build ${status}: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+        body: """
+            <h2>Build ${status}</h2>
+            <p><strong>Project:</strong> ${env.JOB_NAME}</p>
+            <p><strong>Build Number:</strong> ${env.BUILD_NUMBER}</p>
+            <p><strong>Branch:</strong> ${env.BRANCH_NAME ?: env.GIT_BRANCH}</p>
+            <p><strong>Message:</strong> ${message}</p>
+            <p><strong>Build URL:</strong> <a href="${env.BUILD_URL}">${env.BUILD_URL}</a></p>
+        """,
+        to: 'dev-team@example.com',
+        mimeType: 'text/html'
+    )
+}

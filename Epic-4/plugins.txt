@@ -1,0 +1,13 @@
+workflow-aggregator:latest
+docker-workflow:latest
+jacoco:latest
+htmlpublisher:latest
+test-results-analyzer:latest
+build-timeout:latest
+timestamper:latest
+maven-plugin:latest
+git:latest
+configuration-as-code:latest
+job-dsl:latest
+blueocean:latest
+pipeline-stage-view:latest
