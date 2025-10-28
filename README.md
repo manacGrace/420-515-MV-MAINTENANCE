@@ -157,20 +157,7 @@ docker-compose --profile app build series-frontend
 ```
 
 ## 🚨 Troubleshooting
-
-### Common Issues
-
-1. **Port Conflicts**:
-   ```bash
-   # Check port usage (Windows)
-   netstat -ano | findstr :8888
-   netstat -ano | findstr :5173
-   
-   # Kill process (Windows)
-   taskkill /PID <PID> /F
-   ```
-
-2. **Services Not Starting**:
+1. **Services Not Starting**:
    ```bash
    # Check logs
    docker-compose logs series-backend
@@ -181,7 +168,7 @@ docker-compose --profile app build series-frontend
    docker-compose restart series-frontend
    ```
 
-3. **Database Connection Issues**:
+2. **Database Connection Issues**:
    ```bash
    # Check database logs
    docker-compose logs mariadb
@@ -218,17 +205,10 @@ docker system prune -f
 make clean
 ```
 
-## 📊 Health Checks
-
-- **Backend**: http://localhost:8888/actuator/health
-- **Frontend**: http://localhost:5173 (should return HTML)
-- **Jenkins**: http://localhost:8080
-- **API Test**: http://localhost:8888/api/series/all
-
 ## 🔧 Development
 
 ### Local Development (Without Docker)
-
+Change user and password in application.properties
 ```bash
 # Backend
 cd ../420-515-MV-MAINTENANCE-DE-LOGICIEL-LAB1-BACKEND/backend
