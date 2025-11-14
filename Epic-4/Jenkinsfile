@@ -23,6 +23,7 @@ pipeline {
                 script {
                     sh '''
                         cd 420-515-MV-MAINTENANCE-DE-LOGICIEL-LAB1-BACKEND/backend
+                        chmod +x mvnw
                         ./mvnw clean package -DskipTests
                     '''
                 }
@@ -36,6 +37,7 @@ pipeline {
                 script {
                     sh '''
                         cd 420-515-MV-MAINTENANCE-DE-LOGICIEL-LAB1-BACKEND/backend
+                        chmod +x mvnw
                         ./mvnw test
                     '''
                 }
@@ -59,6 +61,7 @@ pipeline {
                 script {
                     sh '''
                         cd 420-515-MV-MAINTENANCE-DE-LOGICIEL-LAB1-BACKEND/backend
+                        chmod +x mvnw
                         ./mvnw verify -DskipUnitTests
                     '''
                 }
@@ -76,6 +79,7 @@ pipeline {
                 script {
                     sh '''
                         cd 420-515-MV-MAINTENANCE-DE-LOGICIEL-LAB1-BACKEND/backend
+                        chmod +x mvnw
                         ./mvnw jacoco:check
                     '''
                 }
@@ -88,6 +92,7 @@ pipeline {
                 script {
                     sh '''
                         cd 420-515-MV-MAINTENANCE-DE-LOGICIEL-LAB1-BACKEND/backend
+                        chmod +x mvnw
                         ./mvnw javadoc:javadoc
                     '''
                 }
