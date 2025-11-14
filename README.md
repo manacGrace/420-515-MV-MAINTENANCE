@@ -93,9 +93,8 @@ make dev-setup
    ```
 
 2. **Get Admin Password**:
-   ```bash
-   docker exec series-jenkins cat /var/jenkins_home/secrets/initialAdminPassword
-   ```
+Username: admin
+Password: admin123
 
 3. **Access Jenkins**: http://localhost:8080
 

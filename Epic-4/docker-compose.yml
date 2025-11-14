@@ -1,5 +1,4 @@
 services:
-  # MariaDB Database
   mariadb:
     image: mariadb:10.11
     container_name: series-mariadb
@@ -17,7 +16,6 @@ services:
       - series-network
     restart: unless-stopped
 
-  # Jenkins CI/CD Server
   jenkins:
     image: jenkins/jenkins:lts-jdk21
     container_name: series-jenkins
@@ -42,7 +40,6 @@ services:
     depends_on:
       - mariadb
 
-  # Application Backend
   series-backend:
     build:
       context: ../420-515-MV-MAINTENANCE-DE-LOGICIEL-LAB1-BACKEND/backend
@@ -63,7 +60,6 @@ services:
     profiles:
       - app
 
-  # Frontend Application
   series-frontend:
     build:
       context: ../420-515-MV-MAINTENANCE-DE-LOGICIEL-LAB1-FRONTEND
@@ -79,7 +75,6 @@ services:
     profiles:
       - app
 
-  # Nginx Reverse Proxy (Optional)
   nginx:
     image: nginx:alpine
     container_name: series-nginx
