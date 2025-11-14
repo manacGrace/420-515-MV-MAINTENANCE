@@ -90,7 +90,7 @@ public class Tendance {
 
             Integer ancienVote = null;
             try (PreparedStatement prtm = con.prepareStatement(
-                    "SELECT score FROM vote WHERE userId = ? AND serieId = ?")) {
+                    "SELECT score FROM Vote WHERE userId = ? AND serieId = ?")) {
                 prtm.setLong(1, userId);
                 prtm.setLong(2, serieId);
                 try (ResultSet rsVote = prtm.executeQuery()) {
@@ -103,7 +103,7 @@ public class Tendance {
 
             if (ancienVote != null) {
                 try (PreparedStatement prtmUpdate = con.prepareStatement(
-                        "UPDATE vote SET score = ? WHERE userId = ? AND serieId = ?")) {
+                        "UPDATE Vote SET score = ? WHERE userId = ? AND serieId = ?")) {
                     prtmUpdate.setInt(1, voteScore);
                     prtmUpdate.setLong(2, userId);
                     prtmUpdate.setLong(3, serieId);
@@ -111,7 +111,7 @@ public class Tendance {
                 }
             } else {
                 try (PreparedStatement prtmInsert = con.prepareStatement(
-                        "INSERT INTO vote (userId, serieId, score) VALUES (?, ?, ?)")) {
+                        "INSERT INTO Vote (userId, serieId, score) VALUES (?, ?, ?)")) {
                     prtmInsert.setLong(1, userId);
                     prtmInsert.setLong(2, serieId);
                     prtmInsert.setInt(3, voteScore);
