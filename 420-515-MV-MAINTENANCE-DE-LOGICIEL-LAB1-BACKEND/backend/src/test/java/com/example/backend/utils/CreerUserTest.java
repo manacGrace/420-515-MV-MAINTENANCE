@@ -7,7 +7,9 @@ class CreerUserTest {
 
     @Test
     void creerUser() throws Exception {
-        boolean result = CreationUser.creerUser("chien@gmail.com", "123");
+        // Use a unique email to avoid conflicts with existing users
+        String uniqueEmail = "test" + System.currentTimeMillis() + "@gmail.com";
+        boolean result = CreationUser.creerUser(uniqueEmail, "123");
         Assertions.assertTrue(result);
     }
 
